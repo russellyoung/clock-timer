@@ -1,0 +1,665 @@
+<!doctype html>
+<html>
+  <head>
+	<title>clock</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="author" content="Russell Young">
+    <meta charset="utf-8">
+    <script type="text/javascript" src="clock.js" > </script>
+	<style>
+     :root {
+       --foreground: #000000;
+       --background: #FFFFFF;
+     }
+	 
+	 body { overflow: hidden; }
+	 .title { font-weight: bold; }
+	 .arrow {color: inherit; background-color: inherit; font-size: 10vh; position: absolute; bottom: 0; left: 0;}
+	 #full {max-height: 95vh; position: relative; color: var(--foreground); background-color: var(--background);}
+	 #alarm {font-size: inherit; }
+	 #alarm-set {padding: 10px; margin: 5px; border: solid; }
+	 .headers {font-weight: bold; }
+	 .quick-choose {margin: 4px; border: 2px solid;}
+	 .quick-choose:hover { background-color: #ccc; font-weight: bold; }
+	 .quick-choose-selected { background-color: black; color: white; }
+	 .option-button {width: fit-content; }
+	 select {width: fit-content; }
+	 #replies button { margin: 5px 10px; }
+	 .next-alarm {
+	   position: absolute; 
+	   color: var(--foreground); 
+	   font-size: 25pt; 
+	   z-index: 1;
+	   bottom: 1px; 
+	   left: 0;
+	   white-space: nowrap;
+	 }
+	 #config-values {
+	   display: grid;
+	   grid-template-columns: auto;
+	 }
+	 #config-values div {
+	   border: solid;
+	   display: grid;
+	   grid-template-columns: auto auto auto;
+	   padding: 5px;
+	   margin: 5px;
+	 }
+	 #config-values div input { width: fit-content; }
+	 arrow {color: inherit; background-color: inherit; font-size: 10vh; position: absolute; bottom: -12px; left: 20px;}
+	 #bar {
+	   background-color: var(--background);
+	   flex-grow: 3;
+	   height: 30pt;
+	   z-index:3;
+	   color: var(--foreground);
+	   border: solid;
+	   padding: 2px;
+	   position: relative;
+	 }
+	 #slider {
+	   background-color: green;
+	   width: 50%;
+	   height: 30pt;
+	   z-index:4;
+	   position: relative;
+	   left: 0;
+	   overflow: clip;
+	 }
+	 
+	 
+	 /* modals */
+	 .modal {
+	   position: fixed; /* Stay in place */
+	   z-index: 100; /* Sit on top */
+	   left: 0;
+	   top: 0;
+	   width: 100%; /* Full width */
+	   height: 100%; /* Full height */
+	   overflow: auto; /* Enable scroll if needed */
+	   background-color: rgb(0,0,0); /* Fallback color */
+	   background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+	 }
+	 .modal-content {
+	   background-color: #fefefe;
+	   margin: 15% auto; /* 15% from the top and centered */
+	   padding: 20px;
+	   border: 1px solid #888;
+	   width: fit-content; /* Could be more or less, depending on screen size */
+	 }
+	 .hide { display: none;}
+	 .center-screen {
+	   display: flex;
+	   justify-content: center;
+	   align-items: center;
+	   text-align: center;
+	   min-height: 100vh;
+	 }
+	 #get-text-size {
+	   visibility: hidden;
+	   position: absolute;
+	   whiteSpace: nowrap;
+	   margin: 0;
+	   padding: 0;
+	   border: 0
+	 }
+
+	</style>
+	<style>
+	 .tab {
+	   overflow: hidden;
+	   border: 1px solid #ccc;
+	   background-color: #f1f1f1;
+	 }
+	 
+	 /* Style the buttons inside the tab */
+	 .tab button {
+	   background-color: inherit;
+	   float: left;
+	   border: none;
+	   outline: none;
+	   cursor: pointer;
+	   padding: 14px 16px;
+	   transition: 0.3s;
+	   font-size: 17px;
+	 }
+	 
+	 /* Change background color of buttons on hover */
+	 .tab button:hover {
+	   background-color: #ddd;
+	 }
+	 
+	 /* Create an active/current tablink class */
+	 .tab button.active {
+	   background-color: #ccc;
+	 }
+	 
+	 /* Style the tab content */
+	 .tabcontent {
+	   display: none;
+	   padding: 6px 12px;
+	   border: 1px solid #ccc;
+	   border-top: none;
+	 }
+	</style>
+	<style>
+	 #menu {
+       position: absolute;
+       background-color: white;
+       border: 1px solid #ccc;
+       box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+       z-index: 1000;
+	 }
+	 
+	 #menu ul {
+       padding: 0;
+       margin: 0;
+       list-style: none;
+	 }
+	 
+	 #menu li {
+       padding: 8px 12px;
+       cursor: pointer;
+	 }
+	 
+	 #menu li:hover {
+       background-color: #f0f0f0;
+	 }
+
+	</style>
+  </head>
+  <body onload = "Clock.init(Clock)" oncontextmenu="menu(event)"
+onresize = "Clock.instance.restyle()"
+onkeydown="Clock.instance.keyHandler(event)" >
+    <div style="display: flex; position: absolute; bottom: 10px; left: 0; width: 100vw;"
+		 onclick="Clock.instance.setDown('toggle')">
+      <div id="spaceholder" style="width: 60px;"></div>
+	  <svg id="up-arrow" class="arrow" style="z-index: 2;" width="60px" height="60px" viewBox="-2.4 -2.4 28.80 28.80" fill="var(--foreground)" xmlns="http://www.w3.org/2000/svg">
+		<g id="SVGRepo_bgCarrier" stroke-width="0">
+		  <rect id="up-arrow-bg" x="-2.4" y="-2.4" width="28.80" height="28.80" rx="14.4" fill="var(--background)" strokewidth="0"/>
+		</g>
+		<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"/>
+		<g id="SVGRepo_iconCarrier"> 
+		  <path id="up-arrow-fg" fill-rule="evenodd" clip-rule="evenodd" d="M12 23C18.0751 23 23 18.0751 23 12C23 5.92487 18.0751 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0751 5.92487 23 12 23ZM21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12ZM17.3137 11.6569L11.6569 6L6 11.6569L7.41421 13.0711L10.6569 9.82843L10.6569 18.6569H12.6569L12.6569 9.82843L15.8995 13.0711L17.3137 11.6569Z" fill="var(--foreground)"/>
+		</g>
+	  </svg>
+	  <svg id="down-arrow" class="arrow" style="z-index: 3;" xmlns="http://www.w3.org/2000/svg" width="60px" height="60px" viewBox="-2.4 -2.4 28.80 28.80" fill="var(--foreground)">
+		<g data-fr-wrap="1" transform="translate(12 12) scale(1 -1) translate(-12 -12)"><g id="SVGRepo_bgCarrier" stroke-width="0">
+		  <rect id="down-arrow-bg" x="-2.4" y="-2.4" width="28.80" height="28.80" rx="14.4" fill="var(--background)" strokewidth="0"/>
+        </g>
+        <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"/>
+        <g id="SVGRepo_iconCarrier"> 
+		  <path id="down-arrow-fg" fill-rule="evenodd" clip-rule="evenodd" d="M12 23C18.0751 23 23 18.0751 23 12C23 5.92487 18.0751 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0751 5.92487 23 12 23ZM21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12ZM17.3137 11.6569L11.6569 6L6 11.6569L7.41421 13.0711L10.6569 9.82843L10.6569 18.6569H12.6569L12.6569 9.82843L15.8995 13.0711L17.3137 11.6569Z" fill="var(--foreground)"/> 
+        </g>
+		</g>
+      </svg>
+	  <div id="bar">
+		<div id="slider">	
+		  <div id="next-alarm-top" class="next-alarm hide" style="color: white; position: absolute"></div>
+		</div>
+		<div id="next-alarm" class="next-alarm hide" style="color: var(--foreground); position: absolute"></div>
+	  </div>
+	</div>
+    <div id="full" class="center-screen" style="position: relative; " disabled=true  >
+      <div id="clock"></div>
+      <div id="alarm"></div>
+      <div id="ding" class="hide" >-- &#x1F514; --</div>
+    </div>
+	<div id="yorn" class="modal hide" onclick="event.stopPropagation()" >
+	  <div class="modal-content" >
+		<span id="question"></span>
+		<p />
+		<div id="replies"></div>
+	  </div>
+	</div>
+	<div id="config-popup" class="modal hide" tabindex="-1" onclick="event.stopPropagation()"
+		 onkeydown="Config.keyHandler(event)">
+	  <div class="modal-content" onclick="event.stopPropagation()" >
+		<div class="tab">
+		  <button id="config-tab" class="tablinks active" onclick="openTab(event.currentTarget, 'config')">Settings</button>
+		  <button id="alarms-tab" class="tablinks" onclick="openTab(event.currentTarget, 'alarms')">Alarms</button>
+		  <button id="alarm-sets-tab" class="tablinks" onclick="openTab(event.currentTarget, 'alarm-sets')">Alarm Sets</button>
+		</div>
+		<div id="config" class="tabcontent active" style="display: block" >
+		  <div id="config-values" onchange="Clock.instance.doConfig()">
+			<div title="clock behavior">
+			  <span title="12-hour or 24-hour (military time) display">Display</span>
+			  <span>
+			    <label>12 hour <input type="radio" id="d12" name="display" value="12" /></label>
+			    <label>24 hour <input type="radio" id="d24" name="display" value="24" checked="checked" /></label>
+			  </span>
+			  <span></span>
+			  <span title="show or suppress seconds">Seconds</span>
+			  <input type="checkbox" name="seconds" value="on" checked="checked" />
+			  <span></span>
+			  <span title="Count down to alarm">Count down</span>
+			  <input type="checkbox" id="down" name="down" value="on" />
+			</div>
+			<div title="clock style">
+			  <span title="Change the clock colors">Color</span>
+			  <span>
+				<input type="color" name="Foreground" title="foreground color" style="width: revert" />
+				<input type="color" name="Background" title="background color" style="width: revert" />
+			  </span>
+			  <span></span>
+    		  <span title="Change the seconds slider color" style="">Seconds bar</span>
+	    	  <input type="color" name="SecondsBackground" title="color of seconds bar" style="width: revert" />
+			  <span></span>
+			  <span title="Length of warning display (minutes)" >Warning</span>
+			  <select name="Warning" title="number of minutes before trigger to use warning style">
+				<option value="0" >none</option>
+				<option value="1" >1 minute</option>
+				<option value="2">2 minutes</option>
+				<option value="3">3 minutes</option>
+				<option value="4">4 minutes</option>
+				<option value="5">5 minutes</option>
+			  </select>
+			  <span>
+				<input type="color" name="WarningForeground" title="foreground color for warning screen" style="width: revert" />
+				<input type="color" name="WarningBackground" title="background color for warning screen" style="width: revert" />
+			  </span>
+			  <span>bell</span>
+			  <select name="Bell" title="audio to play when alarm triggers" >
+				<option value="none" >none</option>
+				<option value="bell" >ding</option>
+				<option value="bzzzt">bzzzt</option>
+				<option value="church">church</option>
+    		  </select>			
+			  <span></span>
+			  <span title="Select the font to use in the time display" >Font</span>
+			  <select id="font-select" name="Font" style="width: 6em">
+		        <option value='inherit' >inherit</option>
+		      </select>
+		      <span>bold<input type="checkbox" name="Bold" value="bold" />
+				italic<input type="checkbox" name="Italic" value="italic" />
+			  </span>
+			</div>
+			<div title="system options">
+			  <span title="number of ms to refresh the display">Refresh</span>
+			  <input type="number" name="refresh" min="100" max="60000" />
+			  <span></span>
+			  <span title="offset in ms to add to time in case there is a lag in the system clock">Fudge</span>
+			  <input type="number" name="fudge" min="-9999" max="9999" size=4 />
+			  <span></span>
+    		  <span title="context menu on right click">context menu</span>
+	    	  <input type="checkbox" name="contextMenu" value="on" />
+			</div>
+		  </div>
+		  <button onclick="CONFIG.save()"
+				  title="save just the base configuration, not including alarms and alarmsets ">Save config</button>
+		  <button onclick="CONFIG.restore()"
+				  title="Restore the base configuration from when it was last saved">Restore config</button>
+		</div>
+	    <div id="alarms" class="tabcontent" >
+		  <select id="alarm-set-2" onchange="AlarmSet.activate(event.target.value)">
+			<option value="" style="display:none">(none)</option>
+		    <option value="">(None) (0)</option>
+		  </select>
+		  <table id="alarm-defs">
+			<tr class="headers">
+			  <td title="delete the alarm on this line" >delete</td>
+			  <td title="the target time (hh:mm:ss, 24-hour format)">time</td>
+			  <td title="optional name referring to this alarm">name</td>
+			  <td title="enable or disable this alarm" >active</td>
+			  <td title="check to keep the alarm after it goes off, otherwise it is deleted">keep</td>
+			  <td title="Change alarm styles" >style</td>
+			</tr>
+		  </table>
+		  <button class="option-button" onclick="AlarmSet.active && AlarmSet.active.newRow(true)"
+				  title="Add a new alarm to this alarm set">+</button>
+		  <p></p>
+		  <button class="option-button" onclick="AlarmSet.applyConfig()"
+				  title="Apply the current changes">Apply</button>
+		  <button class="option-button" onclick="AlarmSet.active && AlarmSet.active.restore()"
+				  title="restore the current alarm set to its last saved state" >Restore</button>
+		</div>
+		<div id="alarm-sets" class="tabcontent" >
+		  <div style="display: grid; grid-template-columns: auto auto;" >
+	        <div id="alarm-set"  onclick="AlarmSet.activate(event.target.value)"
+				 onkeydown="Alarmset.selectKeyHandler(event.target)">
+			  <div>Active Set</div>
+		      <div class="quick-choose" >(none) (0)</div>
+	        </div>
+	        <div id="new-set-group">
+			  <div style="padding: 10px; margin: 5px; border: solid;">
+				<button class="option-button" onclick="AlarmSet.restoreAll()"
+						title="Restore all alarm sets to their last saved state" >restore all</button>
+				<button class="option-button" onclick="AlarmSet.active && AlarmSet.active.delete()"
+						title="Delete the selected alarm set" >delete</button>
+			  </div>
+			  <fieldset id="update-set"
+onchange="AlarmSet.saveStyle(false), AlarmSet.activate(AlarmSet.active)"
+style="padding: 10px; margin: 5px; border: solid; display: grid; grid-template-columns: auto auto;" >
+
+				
+				<span class="title">Style for alarm set <span id="styled-set-name"></span> </span>
+				<span></span>
+				<span title="Change the foreground color">Foreground</span>
+				<span>inherit<input type="checkbox" name="InheritForeground" value="inherit">
+				  <input type="color" name="Foreground" style="width: revert" />
+				</span>
+				<span title="Change the background color">Background</span>
+				<span>inherit<input type="checkbox" name="InheritBackground" value="inherit">
+				  <input type="color" name="Background" style="width: revert" />
+				</span>
+				<span title="Change the seconds bar color">Seconds bar</span>
+				<span>inherit<input type="checkbox" name="InheritSecondsBackground" value="inherit">
+				  <input type="color" name="SecondsBackground" style="width: revert" />
+				</span>
+				<span>warning</span>
+				<select name="Warning" title="number of minutes before trigger to use warning style">
+				  <option value="inherit" >inherit</option>
+				  <option value="0" >none</option>
+				  <option value="1" >1 minute</option>
+				  <option value="2">2 minutes</option>
+				  <option value="3">3 minutes</option>
+				  <option value="4">4 minutes</option>
+				  <option value="5">5 minutes</option>
+				</select>
+				<span title="Change the warning foreground color">Warning foreground</span>
+				<span>inherit<input type="checkbox" name="InheritWarningForeground" value="inherit">
+				  <input type="color" name="WarningForeground" style="width: revert" />
+				</span>
+				<span title="Change the warning background color">Warning background</span>
+				<span>inherit<input type="checkbox" name="InheritWarningBackground" value="inherit">
+				  <input type="color" name="WarningBackground" style="width: revert" />
+				</span>
+				<span>bell</span>
+				<select name="Bell" title="audio to play when alarm triggers" >
+				  <option value="inherit" >inherit</option>
+				  <option value="none" >none</option>
+				  <option value="bell" >ding</option>
+				  <option value="bzzzt">bzzzt</option>
+				  <option value="church">church</option>
+    			</select>			
+				<span title="Select the font to use in the time display">Font</span>
+				<span id="font-select1" name="Font"> </span>
+				<span title="Font options">Font options</span>
+				<span>
+				  bold<select name="Bold">
+				  <option value='inherit'>inherit</option>
+				  <option value='normal'>regular</option>
+				  <option value='bold'>bold</option>
+				  </select>
+				  italic<select name="Italic">
+					<option value='inherit'>inherit</option>
+					<option value='normal'>regular</option>
+					<option value='italic'>italic</option>
+				  </select>
+				</span>
+			  </fieldset>
+			  <div style="padding: 10px; margin: 5px; border: solid; ;" >
+				<input type="text" id="new-set-name" placeholder="new name" style="margin-bottom: 10px" />
+			    <br />
+				<button class="option-button" onclick="AlarmSet.newSet()"
+						title="create a new alarm set" >create</button> 
+				<button class="option-button" onclick="AlarmSet.rename()"
+						title="rename the current alarm set" >rename</button> 
+				<button class="option-button" onclick="AlarmSet.active && AlarmSet.active.copy()"
+						title="create a new copy of the current alarm set" >copy</button>
+			  </div>
+		    </div>
+		  </div>
+		</div>
+		<button onclick="Clock.save()" title="Save the full configuration, including alarms and alarmsets">Save all</button>
+		<button onclick="modal()" title="Close the modal box">Close</button>
+		<span id="error"></span>
+	  </div>
+	</div>
+	<table id="models" class="hide">
+	  <!--child 0: one row for the Alarm table -->
+	  <tr class="hide" >
+		<td><button onclick="AlarmSet.deleteRow(event)"> - </button></td>
+		<td><input type="text" name="time" size=8 ></td>
+		<td><input type="text" name="name" size=8 ></td>
+		<td><input type="checkbox" name="active" value="checked" checked="checked" /></td>
+		<td><input type="checkbox" name="keep" value='checked' /></td>
+		<td><button onclick="Alarm.editStyle(event)">edit</button></td>
+	  </tr>
+	</table>
+	<div id="menu" class="hide" onmouseleave="this.classList.add('hide')" onclick="this.classList.add('hide')">
+      <ul>
+        <li onclick="Clock.showConfig(event)">config</li>
+        <li onclick="window.location.href='clock.html?up'">clock</li>
+        <li onclick="window.location.href='timer.html?up'">stopwatch</li>
+        <li onclick="window.location.href='timer.html?down'">countdown</li>
+        <li onclick="modal('about', 0)">about</li>
+        <li onclick="modal('help', 0)">help</li>
+      </ul>
+	</div>
+	<div id="alarm-style" class="modal hide">
+	  <div title="alarm style" class="modal-content" style="display: grid; grid-template-columns: auto auto;"
+		   onchange="Alarm.saveStyle(false), AlarmSet.activate(AlarmSet.active)" >
+		<span class="title">Style for</span> <span id="alarm-being-styled" class="title"></span>
+		<span title="Change the foreground color">Foreground</span>
+		<span>inherit<input type="checkbox" name="InheritForeground" value="inherit">
+		  <input type="color" name="Foreground" style="width: revert" />
+		</span>
+		<span title="Change the background color">Background</span>
+		<span>inherit<input type="checkbox" name="InheritBackground" value="inherit">
+		  <input type="color" name="Background" style="width: revert" />
+		</span>
+		<span title="Change the seconds bar color">Seconds Bar</span>
+		<span>inherit<input type="checkbox" name="InheritSecondsBackground" value="inherit">
+		  <input type="color" name="SecondsBackground" style="width: revert" />
+		</span>
+		<span>warning</span>
+		<select name="Warning" title="number of minutes before trigger to use warning style">
+		  <option value="inherit" >inherit</option>
+		  <option value="0" >none</option>
+		  <option value="1" >1 minute</option>
+		  <option value="2">2 minutes</option>
+		  <option value="3">3 minutes</option>
+		  <option value="4">4 minutes</option>
+		  <option value="5">5 minutes</option>
+		</select>
+		<span title="Change the warning foreground color">Warning foreground</span>
+		<span>inherit<input type="checkbox" name="InheritWarningForeground" value="inherit">
+		  <input type="color" name="WarningForeground" style="width: revert" />
+		</span>
+		<span title="Change the warning background color">Warning background</span>
+		<span>inherit<input type="checkbox" name="InheritWarningBackground" value="inherit">
+		  <input type="color" name="WarningBackground" style="width: revert" />
+		</span>
+		<span>bell</span>
+		<select name="Bell" title="audio to play when alarm triggers" >
+		  <option value="inherit" >inherit</option>
+		  <option value="none" >none</option>
+		  <option value="bell" >ding</option>
+		  <option value="bzzzt">bzzzt</option>
+		  <option value="church">church</option>
+    	</select>			
+		<span title="Select the font to use in the time display">Font</span>
+		<span id="font-select2" name="Font"> </span>
+		<span title="Font options">Font options</span>
+		<span>
+		  bold<select name="Bold">
+		  <option value='inherit'>inherit</option>
+		  <option value='no'>regular</option>
+		  <option value='bold'>bold</option>
+		  </select>
+		  italic<select name="Italic">
+			<option value='inherit'>inherit</option>
+			<option value='normal'>regular</option>
+			<option value='italic'>italic</option>
+		  </select>
+		</span>
+		<button class="option-button" onclick="modal('config-popup')">close</button>
+	  </div>
+	  
+	</div>
+	<div id="about" class="modal hide" onclick="modal(), event.stopPropagation()">
+	  <div id="about-content" class="modal-content" style="width: 50%"></div>
+	</div>
+	<div id="shortcuts" class="modal hide" onclick="modal(false, 1, event)" >
+	  <div class="modal-content" style="width: 40%">
+		Right click opens context menu
+		<ul>
+		  <li>ctrl-C: open the configuration page</li>
+		  <li>ctrl-A: open the alarm configuration page</li>
+		  <li>ctrl-S: open the alarm set configuration page</li>
+   		  <li><i>(escape)</i> or <i>(enter)</i>: close the configuration page</li>
+		  <li>&uarr;: clock mode (count up)</li>
+		  <li>u: clock mode (count up)</li>
+		  <li>&darr;: stopwatch mode (count down)</li>
+		  <li>d: stopwatch mode (count down)</li>
+		  <li><i>(space)</i>: toggle between clock mode and stopwatch mode</li>
+		  <li>1: set the clock in 12-hour mode</li>
+		  <li>2: set the clock in 24-hour mode (military time)</li>
+		  <li>s: toggle seconds display on and off</li>
+		  <li>ctrl-H: open the help page</li>
+		  <li>?: show shortcut keys</li>
+		</ul>
+	  </div>
+	</div>
+	<div id="help" class="modal hide" onclick="modal(false, -1, event)" >
+	  <div class="modal-content" style="width: 70%">
+		This is a clock. Its basic purpose is to show the time, but it does more than that. It also functions 
+		an alarm clock, signalling when any one of multiple alarms goes off. See the section below on Alarm Sets.
+		<p />
+		When using alarms there is also the option of countdown mode, where the time until the next alarm triggering
+		is displayed, counting down instead of up, rather than the actual time. 
+		<h3>Alarms</h3>
+		Setting an alarm will cause the clock to signal when it expires. Signalling involves flashing the screen and
+		optionally a custom sound. Alarms can be set up on the configuration Alarm screen. Alarms take a time in 
+		24-hour hh:mm:ss format, and can be defined to be one-time or to renew every day. They can also be enabled 
+		or disabled, allowing a user to define a bunch of times and only enable those that are important.
+		<p />
+		Alarms are also grouped into alarm sets. An alarm set is several alarms defined together so they can
+		be enabled or disabled as a group. This app was written to time classes in my school, I have defined
+		different alarm sets for the different schedule the school has - 8th grade, 6th grade, half days... When 
+		an alarm set is enabled all the active alarms in it are enabled at once. The alarm set is set in the dropdown
+		on the Alarm config page. There is a special alarm set called <b>default</b>. These alarms are set at system
+		startup, and have the added feature that they can be defined to be one-time, in which case they will 
+		quietly delete themselves after going off once. Alarms can optionally have names. If they do the name will
+		be displayed for the next alarm scheduled.
+		<h3>Config options</h3>
+		Configuration is nested like CSS is. The current alarms is checked first for the value, then
+		the alarm set, and finally the base configuration. Options set to "inherit" for the alarms or
+		alarm sets defer their value to the parent one.
+		<ul>
+		  <li><b>Foreground</b>: the foreground color</li>
+		  <li><b>Background</b>: the background color</li>
+		  <li><b>Seconds</b>: display (or not) the seconds field</li>
+		  <li><b>Count down</b>: if alarms are set count down to the next alarm rather than going forward</li>
+		  <li><b>Display</b>: 12 hour or 24 hor format. (AM and PM are not displayed in 12-hour format)</li>
+		  <li><b>Font</b>: Select the font to use for display. (monospaced fonts work best)</li>
+		  <li><b>Bold</b>: Use the bold version of the font, if available</li>
+		  <li><b>Refresh</b>: The number of milliseconds to wait between screen updates. If this were set to
+			1000 (one refresh a second) it would possibly skip a second, and be inaccurate by up to a seconds.
+			Setting it too small will slow your browser down. Default is 300ms, about 3 updates per second.</li>
+		  <li><b>Fudge</b>: On my school chromebook I found the clock ran late by about 1.5 seconds. This is
+			particularly obvious when the school bell rings before the clock says it should. The fudge factor
+			is added to the system time to get a better estimate of the true time. For my school
+			chromebook, setting this to 1500 (1.5 seconds) makes it run just right</li>
+		</ul>
+		<p />
+		Changes made in this box are implemented immediately. The actions are:
+		<ul>
+		  <li><b>save config</b>: Writes just these config values in local machine storage. If this
+			is done the current values will be loaded on next startup. Otherwise changes will be lost
+			next time the user opens the app</li>
+		  <li><b>restore config</b>: Restores just the base configuration values to the last saved state</li>
+		  <li><b>save all</b>: Writes the whole configuration, including the state of alarm sets and alarms</li>
+		  <li><b>close</b>: Closes the modal window</li>
+		</ul>
+		<h3>Alarm options</h3>
+		This allows setting multiple alarms. All defined alarms are listed, they can be edited,
+		deleted by clicking the "-" button preceding the definition, or added by using the "+"
+		button. The currrent alarm set is shown at the top of the box on the left. Changing the
+		value in the dropdown will change the active alarm set (logically this should be, and
+		can be, done on the <i>Alarm Set</i> page, but it is convenient to allow it here too)
+		<p />The fields are:
+		<ul>
+		  <li><b>-</b>: delete the alarm defined on the current line</li>
+		  <li><b>time</b>:</li> The time the alarm is set to go off (uses 24-hour time for input). It is
+		  allowed but not required to supply HH:MM:SS, but if :SS or :HH:SS are given 0 is used
+		  for the missing fields
+		  <li><b>active</b>: if not set the alarm is ignored. </li>
+		  <li><b>keep</b>: (only for alarms in the <b>default</b> alarm set) delete the alarm once it has passed.
+			If checked 24 hours will be added to it and it will be saved for the next day</li>
+		  <li><b>bell</b>: the bell to ring when the alarm goes off. The 2 predefined bells ('<i>ding</i>'
+			and '<i>bzzzt</i>') are available, as well as 2 special choices, "<i>(none)</i>" and "<i>(default)</i>".
+			"<i>(none)</i>" will not ring a bell when the alarm goes off, and "<i>(default)</i>" will use the
+			value configured for <b>Alarm.ding</b>. </li>
+		  <li><b>warning</b>: If a number the background will change color that many minutes before the
+			alarm goes off. If set to "none" it will not change color, if to inherit it will default
+			to the value for the alarm set</li>
+		</ul>
+		<p />
+		The actions are:
+		<ul>
+		  <li><b>apply</b>Changes made to the alarms in the alarm table do not immediately take effect.
+			Once all changes are made click the <b>apply</b> button to update the app</li>
+		  <li><b>restore</b>Restores all alarm definitions to the last saved state</li>
+		  <li><b>save all</b>: Writes the whole configuration, including the state of alarm sets and alarms</li>
+		  <li><b>close</b>Closes the modal window</li>
+		</ul>
+		<h3>Alarm Set options</h3>
+		The alarm set page lets you choose and manipulate the active alarm set. The set can be
+		changed by clicking on the desired set in the box on the left. The sections on the right
+		perform actions.
+		<p />
+		The top section contains 2 actions that take no arguments:
+		<ul>
+		  <li><b>restore all</b>: puts the alarm sets back to the state stored locally</li>
+		  <li><b>delete</b>: deletes the current alarm sets and all its alarms</li>
+		</ul>
+		The second section contains the two parameters that can be set for each alarm set,
+		and the button to press to update the values. It is applied dynamically, no button needs
+		to be pressed to apply the changes. The options are:
+		<ul>
+		  <li><b>bell</b>: the default bell value for the alarm set. This value is used for all
+			alarms in the set whose own bell value is set to <i>inherit</i>. Any individual alarm
+			with a different value set will override this value. A value of <i>inherit</i> means
+			that it will use the standard system value.</li>
+		  <li><b>warning</b>: number of minutes before an alarm going off to display a heads-up
+			warning. This is currently a yellow background and is not (yet) configurable. Values
+			from 0 to 5 minutes are offered, along with <i>(none)</i>. The value sets holds for all
+			alarms in the set who have their own warning set to <i>inherit</i>, others override it
+			with their own values</li>
+		</ul>
+		The third section contains buttons which operate on the active alarm set. They may use a new
+		name entered in the input field. The options are:
+		<ul>
+		  <li><b>create</b>: Creates a new, empty alarm set with the values those in the above config
+			fields. The name must be entered in the input field or else the button is ignored.</li>
+		  <li><b>rename</b>: renames the active alarm set to the name given in the input field</li>
+		  <li><b>copy</b>: copies the active alarm set to the name given in the input field, or if
+			none is given generate one based on the active set's name</li>
+		</ul>
+		<h3>Keyboard shortcuts</h3>
+		There are a few keyboard shortcuts defined to make using the clock more convenient. These include:
+		<ul>
+		  <li><b>(space)</b>: toggle countdown mode</li>
+		  <li><b>u</b>, <b>UpArrow</b>: set Clock mode (count up)</li>
+		  <li><b>d</b>, <b>DownArrow</b>: set Timer mode (count down to next alarm)</li>
+		  <li><b>Ctrl-A</b>: open the Alarm configuration page</li>
+		  <li><b>Ctrl-C</b>: open the configuration page</li>
+		  <li><b>Ctrl-H</b>: open the help popup</li>
+		  <li><b>Ctrl-S</b>: change the active alarm set</li>
+		  <li><b>1</b>: set the clock in 12-hour mode</li>
+		  <li><b>2</b>: set the clock in 24-hour mode (military time)</li>
+   		  <li><b>(escape)</b> or <b>(enter)</b>: close the configuration page</li>
+   		  <li><b>?</b> or <b>ctrl-?</b>: open the shortcut help popup</li>
+		</ul>
+		<h3>Startup</h3>
+		There are startup options that make it possible to jump straight to many common configurations.
+		They are:
+		<ul>
+		  <li>?<b>up</b>: force the clock to start in <i>up</i> mode, counting up like a regular clock</li>
+		  <li>?<b>down</b>: force the clock to start in <i>down</i> mode, counting down like a timer to each
+			alarm (only if any alarms are set)</li>
+		  <li>?<b>curtis</b>: include the standard Curtis Middle School schedule (only needed the first time
+			if you press <i>save all</i> on the AlarmSet page, which will save your current configuration
+			so it is loaded by default on startup)</li>
+		  <li>?<b>set=<i>SETNAME</i></b>: load the alarm set given by <i>SETNAME</i>. The set <i>default</i>
+			is normally activated first.</li>
+		  <li>?<b>noread</b>:do not read the locally stored configuation at startup</li>
+		</ul>
+	  </div>
+	</div>
+	<div id="get-text-size"></div>
+  </body>	
+</html>

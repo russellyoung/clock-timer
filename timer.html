@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+  <head>
+	<title>Timer</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="author" content="Russell Young">
+    <script type="text/javascript" src="clock.js" > </script>
+	<style>
+     :root {
+       --foreground: #000000;
+       --background: #FFFFFF;
+       --SecondsB: #00FF00;
+     }
+	 body { overflow: hidden; }
+	 #alarm {font-size: inherit; }
+	 #full {max-height: 95vh; position: relative; color: var(--foreground); background-color: var(--background);}
+	 #paused {color: red; font-size: 25pt; }
+	 #bar {
+	   background-color: var(--background);
+	   flex-grow: 3;
+	   height: 25px;
+	   z-index:3;
+	   color: var(--foreground);
+	   border: solid;
+	   padding: 2px;
+	 }
+	 #slider {
+	   background-color: green;
+	   width: 50%;
+	   height: 25px;
+	   z-index:4;
+	 }
+	 .setting {background: #888888; }
+	 .title { font-weight: bold; }
+	 .arrow {color: inherit; background-color: inherit; font-size: 10vh; position: absolute; bottom: -12px; left: 20px;}
+	</style>
+	<style>
+	 #menu {
+       position: absolute;
+       background-color: white;
+       border: 1px solid #ccc;
+       box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+       z-index: 1000;
+	 }
+	 
+	 #menu ul {
+       padding: 0;
+       margin: 0;
+       list-style: none;
+	 }
+	 
+	 #menu li {
+       padding: 8px 12px;
+       cursor: pointer;
+	 }
+	 
+	 #menu li:hover {
+       background-color: #f0f0f0;
+	 }
+	 #config-values {
+	   display: grid;
+	   grid-template-columns: auto;
+	 }
+	 #config-values div {
+	   border: solid;
+	   display: grid;
+	   grid-template-columns: auto auto;
+	   padding: 5px;
+	   margin: 5px;
+	 }
+	 #config-values div input { width: fit-content; }
+	</style>
+	<style>
+	 /* modals */
+	 .modal {
+	   position: fixed; /* Stay in place */
+	   z-index: 100; /* Sit on top */
+	   left: 0;
+	   top: 0;
+	   width: 100%; /* Full width */
+	   height: 100%; /* Full height */
+	   overflow: auto; /* Enable scroll if needed */
+	   background-color: rgb(0,0,0); /* Fallback color */
+	   background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+	 }
+	 .modal-content {
+	   background-color: #fefefe;
+	   margin: 15% auto; /* 15% from the top and centered */
+	   padding: 20px;
+	   border: 1px solid #888;
+	   width: fit-content; /* Could be more or less, depending on screen size */
+	 }
+	 .center-screen {
+	   display: flex;
+	   justify-content: center;
+	   align-items: center;
+	   text-align: center;
+	   min-height: 100vh;
+	   position: relative;
+	 }
+	 .hide { display: none;}
+	 .invisible {visibility: hidden; }
+	 #get-text-size {
+	   visibility: hidden;
+	   position: absolute;
+	   whiteSpace: nowrap;
+	   margin: 0;
+	   padding: 0;
+	   border: 0
+	 }
+	</style>
+  </head>
+  <body onload = "Timer.init()" oncontextmenu="menu(event)" 
+onkeydown="Clock.instance.keyHandler(event)" 
+onresize="Clock.instance.restyle()">
+    <div style="display: flex; position: absolute; bottom: 10px; left: 0; width: 100vw;"
+		 onclick="Clock.instance.setDown('toggle')">
+      <div id="spaceholder" style="width: 80px;"></div>
+	  <svg id="up-arrow" class="arrow" style="z-index: 2;" width="60px" height="60px" viewBox="-2.4 -2.4 28.80 28.80" fill="var(--foreground)" xmlns="http://www.w3.org/2000/svg">
+		<g id="SVGRepo_bgCarrier" stroke-width="0">
+		  <rect id="up-arrow-bg" x="-2.4" y="-2.4" width="28.80" height="28.80" rx="14.4" fill="var(--background)" strokewidth="0"/>
+		</g>
+		<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"/>
+		<g id="SVGRepo_iconCarrier"> 
+		  <path id="up-arrow-fg" fill-rule="evenodd" clip-rule="evenodd" d="M12 23C18.0751 23 23 18.0751 23 12C23 5.92487 18.0751 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0751 5.92487 23 12 23ZM21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12ZM17.3137 11.6569L11.6569 6L6 11.6569L7.41421 13.0711L10.6569 9.82843L10.6569 18.6569H12.6569L12.6569 9.82843L15.8995 13.0711L17.3137 11.6569Z" fill="var(--foreground)"/>
+		</g>
+	  </svg>
+	  <svg id="down-arrow" class="arrow" style="z-index: 3;" xmlns="http://www.w3.org/2000/svg" width="60px" height="60px" viewBox="-2.4 -2.4 28.80 28.80" fill="var(--foreground)">
+		<g data-fr-wrap="1" transform="translate(12 12) scale(1 -1) translate(-12 -12)"><g id="SVGRepo_bgCarrier" stroke-width="0">
+          <rect id="down-arrow-bg" x="-2.4" y="-2.4" width="28.80" height="28.80" rx="14.4" fill="var(--background)" strokewidth="0"/>
+        </g>
+        <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"/>
+        <g id="SVGRepo_iconCarrier"> 
+          <path id="down-arrow-fg" fill-rule="evenodd" clip-rule="evenodd" d="M12 23C18.0751 23 23 18.0751 23 12C23 5.92487 18.0751 1 12 1C5.92487 1 1 5.92487 1 12C1 18.0751 5.92487 23 12 23ZM21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12ZM17.3137 11.6569L11.6569 6L6 11.6569L7.41421 13.0711L10.6569 9.82843L10.6569 18.6569H12.6569L12.6569 9.82843L15.8995 13.0711L17.3137 11.6569Z" fill="var(--foreground)"/> 
+        </g>
+		</g>
+      </svg>
+	  <div id="bar">
+		<div id="slider"></div>
+	  </div>
+	</div>
+	<div style="text-align:center; position: absolute; width: 100%;">
+	  <span id="paused">-- PAUSED --</span>
+	</div>
+    <div id="full" class="center-screen" >
+      <div id="clock">
+		<span id="hours">00</span><span id="colon1">:</span><span id="minutes">00</span><span id="colon2">:</span><span id="seconds">00</span>
+	  </div>
+      <div id="ding" class="hide" onclick="Clock.instance.toggle()">-- &#x1F514; --</div>
+    </div>
+	<div id="config-popup" class="modal hide" onclick="event.stopPropagation()">
+	  <div id="config-values" class="modal-content" onchange="Clock.instance.doConfig()">
+		<span class="title">Configuration</span>
+		<div title="clock behavior">
+		  <span title="show or suppress seconds">Seconds</span>
+		  <input type="checkbox" name="seconds" value="on" checked="checked" />
+		  <span title="Count down to alarm">Count down</span>
+		  <input type="checkbox" id="down" name="down" value="on" />
+		  <span title="Keep track of time even when system sleeps">Keep awake</span>
+		  <input type="checkbox" name="watchdog" value="on" />
+		  <span title="context menu on right click">context menu</span>
+		  <input type="checkbox" name="contextMenu" value="on" />
+		</div>
+		<div title="clock style">
+		  <span title="Change the foreground color">Foreground</span>
+		  <input type="color" name="Foreground" style="width: revert" />
+		  <span title="Change the background color">Background</span>
+		  <input type="color" name="Background" style="width: revert" />
+		  <span title="Length of warning display (minutes)">Warning</span>
+		  <select name="Warning" title="number of minutes before trigger to use warning style">
+			<option value="0" >none</option>
+			<option value="1" >1 minute</option>
+			<option value="2">2 minutes</option>
+			<option value="3">3 minutes</option>
+			<option value="4">4 minutes</option>
+			<option value="5">5 minutes</option>
+		  </select>
+		  <span title="Change the warning foreground color">Warning Foreground</span>
+		  <input type="color" name="WarningForeground" style="width: revert" />
+		  <span title="Change the warning background color">Warning Background</span>
+		  <input type="color" name="WarningBackground" style="width: revert" />
+		  <span title="Change the seconds slider color">Seconds bar</span>
+		  <input type="color" name="SecondsBackground" style="width: revert" />
+		  <span>bell</span>
+		  <select name="Bell" title="audio to play when alarm triggers" >
+			<option value="none" >none</option>
+			<option value="bell" >ding</option>
+			<option value="bzzzt">bzzzt</option>
+			<option value="church">church</option>
+    	  </select>			
+		  <span title="Select the font to use in the time display">Font</span>
+		  <select id="font-select" name="Font">
+		    <option value='inherit' >inherit</option>
+		  </select>
+		  <span title="Font options">Font options</span>
+		  <span>
+			bold<input type="checkbox" name="Bold" value="bold" />
+			italic<input type="checkbox" name="Italic" value="italic" />
+		  </span>
+		</div>
+		<span>
+		  <button onclick="CONFIG.save()" title="save the configuration locally">Save</button>
+		  <button onclick="CONFIG.restore()" title="Restore the configuration from local storage">Restore</button>
+		  <button onclick="modal()" title="Close the configuration popup">Close</button>
+		</span>
+	  </div>
+	</div>
+	<div id="menu" class="hide" onmouseleave="this.classList.add('hide')" onclick="this.classList.add('hide')" >
+      <ul>
+        <li id="start-pause-menu" onclick="Clock.instance.toggle(), menu(event)">Start</li>
+        <li onclick="CONFIG.showConfig(event)">config</li>
+        <li onclick="window.location.href='clock.html'">clock</li>
+        <li onclick="window.location.href='timer.html?down'">countdown</li>
+        <li onclick="window.location.href='timer.html?up'">timer</li>
+        <li onclick="modal('about', 0)">about</li>
+        <li onclick="modal('help', 0)">help</li>
+      </ul>
+	</div>
+	<div id="about" class="modal hide" onclick="modal(), event.stopPropagation()" >
+	  <div id="about-content" class="modal-content" style="width: 50%">
+	  </div>
+	</div>
+	<div id="yorn" class="modal hide" onclick="event.stopPropagation()" >
+	  <div class="modal-content" >
+		<span id="question"></span>
+		<p />
+		<div id="replies"></div>
+	  </div>
+	</div>
+	<div id="help" class="modal hide" onclick="modal(), event.stopPropagation()" >
+	  <div class="modal-content" style="width: 70%">
+		This is a timer that will count down from a given time to
+		zero. The timer can be paused and restarted, and even have the
+		time changed when paused. <p />
+		
+		When the timer is stopped use the arrow keys to select the
+		time. Left and right move between the different fields (hours,
+		minutes, and seconds), and up and down move the time in the
+		selected field up or down. <p />
+
+		Once the time has been set the timer can be started by
+		clicking on the start button, by left clicking and choosing
+		"start" from the menu, or by use of one of the keys given
+		below. Similarly, it can be paused the same way: the Pause
+		button, the Pause menu entry, or any of the shortcut keys
+		listed below.
+
+		<h3>Keys</h3>
+		<ul>
+		  <li><span class="keyword">Left arrow</span>: when paused, move the input the the field to the left</li>
+		  <li><span class="keyword">right arrow</span>: when paused, move the input the the field to the right</li>
+		  <li><span class="keyword">down arrow</span>: when paused, decrease the value in the selected field by 1 (for minutes or second roll over to 59)</li>
+		  <li><span class="keyword">up arrow</span>: when paused, increase the value in the selected field by 1 (for minutes or second roll over from 59 to 0)</li>
+		  <li><span class="keyword">Space</span>, <span class="keyword">Enter</span>: toggle the timer state between running and paused</li>
+		  <li><span class="keyword">P</span>: pause the timer</li>
+		  <li><span class="keyword">S</span>, <span class="keyword">G</span>: start the timer</li>
+		</ul>
+		<h3>Config options</h3>
+		<ul>
+		  <li>Foreground: the foreground color</li>
+		  <li>Background: the background color</li>
+		  <li>Font: Select the font to use for display. (monospaced fonts work best)</li>
+		  <li>Bold: Use the bold version of the font, if available</li>
+		  <li>Alarm sound: the bell to ring when the alarm goes off. The 2 predefined bells ('ding'
+			and 'bzzzt') are available, as well as 2 special choices, "(none)" and "(default)".
+			"(none)" will not ring a bell when the alarm goes off, and "(default)" will use the
+			value configured for Alarm.ding. </li>
+		</ul>
+	  </div>
+	</div>
+	<div id="get-text-size"></div>
+  </body>	
+</html>

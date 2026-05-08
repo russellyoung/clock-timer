@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400&family=Playfair+Display:wght@400&family=Pacifico&family=Fredoka+One&family=Orbitron:wght@400&display=swap" rel="stylesheet">
+
+<style>
+html, body {
+  height: 100%;
+  margin: 0;
+  background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+#clock {
+  color: white;
+  font-family: "Roboto Mono", monospace;
+  text-align: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+#alarmIndicator {
+  position: absolute;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+  color: #888;
+  font-family: monospace;
+  font-size: 2rem;
+  pointer-events: none;
+}
+
+.flash-red { background: red !important; }
+.flash-green { background: green !important; }
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  font-family: sans-serif;
+  max-width: 70%;
+  overflow: scroll;
+}
+
+.modal-content input {
+  font-size: 1.2rem;
+  margin: 10px 0;
+  width: 4rem;
+  text-align: center;
+}
+
+.click-menu {
+  position: absolute;
+  display: none;
+  background: #222;
+  color: white;
+  padding: 10px;
+  border-radius: 6px;
+  font-family: sans-serif;
+  z-index: 2000;
+}
+
+.click-menu div {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.click-menu div:hover {
+  background: #444;
+}
+</style>
+
+<script>
+// -------------------- CLOCK --------------------
+
+function updateClock() {
+  const now = new Date();
+  const clock = document.getElementById("clock");
+
+  if (countdownMode) {
+    const next = getNextAlarm(now);
+    if (!next) {
+      clock.textContent = "No alarms set";
+    } else {
+      clock.textContent = formatCountdown(next.secondsAway);
+    }
+    autoSizeText();
+    return;
+  }
+
+  const h = now.getHours().toString().padStart(2, "0");
+  const m = now.getMinutes().toString().padStart(2, "0");
+  const s = now.getSeconds().toString().padStart(2, "0");
+
+  clock.textContent = `${h}:${m}:${s}`;
+  autoSizeText();
+  checkAlarm(now);
+}
+
+function autoSizeText() {
+  const clock = document.getElementById("clock");
+  let fontSize = 10;
+  clock.style.fontSize = fontSize + "px";
+
+  const maxWidth = window.innerWidth * 0.9;
+  const maxHeight = window.innerHeight * 0.9;
+
+  while (clock.offsetWidth < maxWidth && clock.offsetHeight < maxHeight) {
+    fontSize++;
+    clock.style.fontSize = fontSize + "px";
+  }
+
+  clock.style.fontSize = (fontSize - 1) + "px";
+}
+
+window.addEventListener("resize", autoSizeText);
+
+// -------------------- STATE --------------------
+
+let alarmSets = {};
+let activeSet = null;
+let countdownMode = false;
+let flashInterval = null;
+
+// -------------------- STORAGE --------------------
+
+function saveAlarmSets() {
+  localStorage.setItem("alarmSets", JSON.stringify(alarmSets));
+  localStorage.setItem("activeSet", activeSet);
+}
+
+function loadAlarmSets() {
+  const stored = localStorage.getItem("alarmSets");
+  const active = localStorage.getItem("activeSet");
+
+  if (stored) alarmSets = JSON.parse(stored);
+  if (active) activeSet = active;
+}
+
+// -------------------- ALARM SET SELECT --------------------
+
+function renderAlarmSetSelect() {
+  const select = document.getElementById("alarmSetSelect");
+  select.innerHTML = "";
+
+  const names = Object.keys(alarmSets);
+
+  if (names.length === 0) {
+    alarmSets["Default"] = [];
+    activeSet = "Default";
+    saveAlarmSets();
+  }
+
+  Object.keys(alarmSets).forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    if (name === activeSet) option.selected = true;
+    select.appendChild(option);
+  });
+}
+
+function changeAlarmSet(e) {
+  activeSet = e.target.value;
+  renderAlarmList();
+  updateAlarmIndicator();
+  saveAlarmSets();
+}
+
+function createNewSet(e) {
+  e.stopPropagation();
+  const name = prompt("Enter a name for the new alarm set:");
+  if (!name) return;
+
+  if (alarmSets[name]) {
+    alert("A set with that name already exists.");
+    return;
+  }
+
+  alarmSets[name] = [];
+  activeSet = name;
+
+  saveAlarmSets();
+  renderAlarmSetSelect();
+  renderAlarmList();
+  updateAlarmIndicator();
+}
+
+function deleteCurrentSet(e) {
+  e.stopPropagation();
+  if (!activeSet) return;
+
+  if (!confirm(`Delete alarm set "${activeSet}"?`)) return;
+
+  delete alarmSets[activeSet];
+  activeSet = Object.keys(alarmSets)[0] || null;
+
+  saveAlarmSets();
+  renderAlarmSetSelect();
+  renderAlarmList();
+  updateAlarmIndicator();
+}
+
+// -------------------- ALARM LIST --------------------
+
+function renderAlarmList() {
+  const list = document.getElementById("alarmList");
+  list.innerHTML = "";
+
+  if (!activeSet || !alarmSets[activeSet]) return;
+
+  alarmSets[activeSet].forEach((time, index) => {
+    const li = document.createElement("li");
+    li.textContent = time + " ";
+
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.onclick = (e) => {
+      e.stopPropagation();
+      alarmSets[activeSet].splice(index, 1);
+      saveAlarmSets();
+      renderAlarmList();
+      updateAlarmIndicator();
+    };
+
+    li.appendChild(del);
+    list.appendChild(li);
+  });
+}
+
+// -------------------- ADD ALARM --------------------
+
+function addAlarm(e) {
+  e.stopPropagation();
+
+  if (!activeSet) {
+    alert("Please create an alarm set first.");
+    return;
+  }
+
+  const hourInput = document.getElementById("alarmHour").value;
+  const minuteInput = document.getElementById("alarmMinute").value;
+  const secondInput = document.getElementById("alarmSecond").value;
+
+  if (hourInput === "" || minuteInput === "" || secondInput === "") return;
+
+  let h = parseInt(hourInput, 10);
+  let m = parseInt(minuteInput, 10);
+  let s = parseInt(secondInput, 10);
+
+  if (
+    isNaN(h) || isNaN(m) || isNaN(s) ||
+    h < 0 || h > 23 ||
+    m < 0 || m > 59 ||
+    s < 0 || s > 59
+  ) {
+    alert("Please enter a valid 24-hour time (HH:MM:SS).");
+    return;
+  }
+
+  const hh = h.toString().padStart(2, "0");
+  const mm = m.toString().padStart(2, "0");
+  const ss = s.toString().padStart(2, "0");
+
+  alarmSets[activeSet].push(`${hh}:${mm}:${ss}`);
+
+  saveAlarmSets();
+  renderAlarmList();
+  updateAlarmIndicator();
+}
+
+// -------------------- INDICATOR --------------------
+
+function updateAlarmIndicator() {
+  const indicator = document.getElementById("alarmIndicator");
+
+  if (!activeSet || !alarmSets[activeSet] || alarmSets[activeSet].length === 0) {
+    indicator.textContent = "";
+    return;
+  }
+
+  indicator.textContent =
+    `Set: ${activeSet} | Alarms: ` + alarmSets[activeSet].join(", ");
+}
+
+// -------------------- COUNTDOWN --------------------
+
+function getNextAlarm(now) {
+  if (!activeSet || !alarmSets[activeSet] || alarmSets[activeSet].length === 0)
+    return null;
+
+  const alarms = alarmSets[activeSet];
+
+  const currentSeconds =
+    now.getHours() * 3600 +
+    now.getMinutes() * 60 +
+    now.getSeconds();
+
+  let soonest = null;
+  let soonestDiff = Infinity;
+
+  alarms.forEach((time) => {
+    const [h, m, s] = time.split(":").map(Number);
+    const alarmSeconds = h * 3600 + m * 60 + s;
+
+    let diff = alarmSeconds - currentSeconds;
+    if (diff < 0) diff += 24 * 3600;
+
+    if (diff < soonestDiff) {
+      soonestDiff = diff;
+      soonest = time;
+    }
+  });
+
+  return { time: soonest, secondsAway: soonestDiff };
+}
+
+function formatCountdown(secondsAway) {
+  const h = Math.floor(secondsAway / 3600);
+  const m = Math.floor((secondsAway % 3600) / 60);
+  const s = secondsAway % 60;
+
+  return (
+    h.toString().padStart(2, "0") + ":" +
+    m.toString().padStart(2, "0") + ":" +
+    s.toString().padStart(2, "0")
+  );
+}
+
+// -------------------- ALARM CHECK --------------------
+
+function checkAlarm(now) {
+  if (!activeSet || !alarmSets[activeSet]) return;
+
+  const alarms = alarmSets[activeSet];
+  const current = now.toTimeString().slice(0, 8); // "HH:MM:SS"
+
+  alarms.forEach((time, index) => {
+    if (time === current) {
+      startFlashing();
+      alarms.splice(index, 1);
+      saveAlarmSets();
+      renderAlarmList();
+      updateAlarmIndicator();
+    }
+  });
+}
+
+// -------------------- FLASHING --------------------
+
+function startFlashing() {
+  let state = false;
+
+  flashInterval = setInterval(() => {
+    state = !state;
+
+    if (state) {
+      document.body.classList.add("flash-red");
+      document.body.classList.remove("flash-green");
+    } else {
+      document.body.classList.add("flash-green");
+      document.body.classList.remove("flash-red");
+    }
+  }, 300);
+
+  setTimeout(stopFlashing, 5000);
+}
+
+function stopFlashing() {
+  clearInterval(flashInterval);
+  document.body.classList.remove("flash-red", "flash-green");
+}
+
+// -------------------- MODALS --------------------
+
+function openAlarmModal() {
+  document.getElementById("alarmModal").style.display = "flex";
+}
+
+function closeModal(e) {
+  if (e) e.stopPropagation();
+  document.getElementById("alarmModal").style.display = "none";
+}
+
+function openConfigModal() {
+  document.getElementById("configModal").style.display = "flex";
+}
+
+function openAboutModal() {
+  document.getElementById("aboutModal").style.display = "flex";
+}
+
+function closeConfigModal(e) {
+  if (e) e.stopPropagation();
+  document.getElementById("configModal").style.display = "none";
+}
+
+function closeAboutModal(e) {
+  if (e) e.stopPropagation();
+  document.getElementById("aboutModal").style.display = "none";
+}
+
+// -------------------- FONT CONFIG --------------------
+
+function changeFont(e) {
+  const font = e.target.value;
+  document.getElementById("clock").style.fontFamily = `"${font}", sans-serif`;
+  localStorage.setItem("clockFont", font);
+}
+
+// -------------------- CLICK MENU --------------------
+
+document.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  const menu = document.getElementById("clickMenu");
+  menu.style.left = e.pageX + "px";
+  menu.style.top = e.pageY + "px";
+  menu.style.display = "block";
+});
+
+document.addEventListener("click", () => {
+  document.getElementById("clickMenu").style.display = "none";
+});
+
+// -------------------- KEYBOARD --------------------
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    countdownMode = !countdownMode;
+  }
+});
+
+// -------------------- INIT --------------------
+
+function init() {
+  loadAlarmSets();
+  renderAlarmSetSelect();
+  renderAlarmList();
+  updateAlarmIndicator();
+
+  const savedFont = localStorage.getItem("clockFont");
+  if (savedFont) {
+    document.getElementById("clock").style.fontFamily = `"${savedFont}", sans-serif`;
+    document.getElementById("fontSelect").value = savedFont;
+  }
+
+  setInterval(updateClock, 1000);
+  updateClock();
+}
+</script>
+</head>
+
+<body onload="init()">
+  <div id="clock"></div>
+  <div id="alarmIndicator"></div>
+
+  <!-- ALARM MODAL -->
+  <div id="alarmModal" class="modal">
+    <div class="modal-content">
+
+      <h3>Alarm Set</h3>
+      <select id="alarmSetSelect" onchange="changeAlarmSet(event)"></select>
+      <button onclick="createNewSet(event)">New Set</button>
+      <button onclick="deleteCurrentSet(event)">Delete Set</button>
+
+      <h2>Set Alarm (24-hour)</h2>
+
+      <div>
+        <input type="number" id="alarmHour" min="0" max="23" placeholder="HH">
+        :
+        <input type="number" id="alarmMinute" min="0" max="59" placeholder="MM">
+        :
+        <input type="number" id="alarmSecond" min="0" max="59" placeholder="SS">
+      </div>
+
+      <button onclick="addAlarm(event)">Add Alarm</button>
+      <button onclick="closeModal(event)">Close</button>
+
+      <h3>Alarms</h3>
+      <ul id="alarmList"></ul>
+
+    </div>
+  </div>
+
+  <!-- CLICK MENU -->
+  <div id="clickMenu" class="click-menu">
+    <div onclick="openAlarmModal()">Set Alarms</div>
+    <div onclick="openConfigModal()">Config</div>
+    <div onclick="openAboutModal()">About</div>
+  </div>
+
+  <!-- CONFIG MODAL -->
+  <div id="configModal" class="modal">
+    <div class="modal-content">
+      <h2>Configuration</h2>
+
+      <label for="fontSelect">Clock Font:</label>
+      <select id="fontSelect" onchange="changeFont(event)">
+        <option value="Roboto Mono">Roboto Mono (monospace)</option>
+        <option value="Playfair Display">Playfair Display (serif)</option>
+        <option value="Pacifico">Pacifico (script)</option>
+        <option value="Fredoka One">Fredoka One (playful)</option>
+        <option value="Orbitron">Orbitron (modern)</option>
+      </select>
+
+      <button onclick="closeConfigModal(event)">Close</button>
+    </div>
+  </div>
+
+  <!-- ABOUT MODAL -->
+  <div id="aboutModal" class="modal">
+    <div class="modal-content" style="text-align: left;">
+      <h2>About</h2>
+In 2026 I was working as a sub teacher. Sometimes it was convenient to have a timer
+or a clock for my classes and I used ones I found online. But, suddenly the clock 
+had lots of intrusive ads put in it which needed to be closed before being used.
+After a quick search I couldn't find anything exactly what I wanted, so I decided to
+write my own.
+<p></p>
+I did - it is <a href="clock.html">clock.html</a>. It does everything I need and a bunch more: 
+there are always bells and whistles that can be added. I spent a week of free time on it. On
+finishing I thought it might be a good chance to test out AI for coding, so I went to copilot
+and started.
+<p></p>
+In all I spent under 2 hours on it. It does not have all the features mine does, but it does 
+have all the important ones, and another half hour would probably give it the rest. The code 
+is simpler - very straightforward, and compared to <b>clock</b>, which uses objects to provide
+a more elegant solution. If someone wants to fix or modify the code the AI code has the 
+advantage that it is probably simpler to understand at first glance - to modify OO code you need
+to understand the objects, which might take more time. On the other hand, for more complicated 
+changes, enhancement, or code reuse the OO code is better. 
+<p></p>
+I was also surprised at some of the mistakes in the code. Several times I'd put in the changes
+that the AI sent me and found errors that were similar to what a careless programmer (like me)
+might make - leaving in references to replaced variable names, putting listeners in the wrong
+place, etc. I did not expect this type of error. The CSS organization was much cleaner and better
+than mine.
+<p></p>
+In a project this small it doesn't make much difference, but in a larger one the straightforward 
+approach will get messy. The tldr I get from this is that for writing shorter modules AI is a 
+wonderful time saver, it is probably best to have a design in mind and use AI to fill in the
+modules, much like a junior programmer or a consultant might do.
+<p></p>
+Feel free to redistribute or modify this code, but please leave in the attribution. 
+<br /><a href="">Russell Young</a>, April 2026, 
+<p></p>
+      <button onclick="closeAboutModal(event)">Close</button>
+    </div>
+  </div>
+</body>
+</html>
