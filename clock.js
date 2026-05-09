@@ -338,9 +338,9 @@ class Clock {
 	// TYPE names a type of color: for now, 'Warming', 'Flash', or '' for default colors
 	restyle(type='') {
 		document.documentElement.style.setProperty('--foreground', 
-    											   CONFIG.get(type + 'Foreground', true) || CONFIG.get('Foreground', true));
+    		CONFIG.get(type + 'Foreground', true) || CONFIG.get('Foreground', true));
 		document.documentElement.style.setProperty('--background', 
-    											   CONFIG.get(type + 'Background', true) || CONFIG.get('Background', true));
+    		CONFIG.get(type + 'Background', true) || CONFIG.get('Background', true));
 		document.getElementById('slider').style.background = CONFIG.get('SecondsBackground', true);
 		//console.log('restyle');
 		this.fitFont();
@@ -425,32 +425,32 @@ class Clock {
 	    let ret = true;
 	    if (!modalLevel()) {
 	        switch(key) {
-				case 'Digit1':
-					CONFIG.set('display', 12);
-					document.getElementById('d12').checked = 'checked';
-					break;
-				case 'Digit2':
-					CONFIG.set('display', 24);
-					document.getElementById('d24').checked = 'checked';
-					break;
-				case 'Space': this.setDown('toggle'); break;
-				case 'KeyD':
-				case 'ArrowDown': this.setDown('down'); break;
-				case 'KeyU':
-				case 'ArrowUp':
-					this.setDown('up');
-					break;
-				case 'ctrlKeyU':
-				case 'ArrowUp':
-					ev.preventDefault();
-					this.setDown('up');
-					break;
-				case 'KeyS':   CONFIG.set('seconds', (CONFIG.get('seconds') ? '' : 'on')); break;
-				case 'ctrlshiftSlash':
-				case 'shiftSlash':
-					modal('shortcuts', 0);
-					break;
-				default: ret = false;
+            case 'Digit1':
+                CONFIG.set('display', 12);
+                document.getElementById('d12').checked = 'checked';
+                break;
+            case 'Digit2':
+                CONFIG.set('display', 24);
+                document.getElementById('d24').checked = 'checked';
+                break;
+	        case 'Space': this.setDown('toggle'); break;
+            case 'KeyD':
+            case 'ArrowDown': this.setDown('down'); break;
+            case 'KeyU':
+            case 'ArrowUp':
+				this.setDown('up');
+				break;
+            case 'ctrlKeyU':
+            case 'ArrowUp':
+				ev.preventDefault();
+				this.setDown('up');
+				break;
+            case 'KeyS':   CONFIG.set('seconds', (CONFIG.get('seconds') ? '' : 'on')); break;
+			case 'ctrlshiftSlash':
+			case 'shiftSlash':
+				modal('shortcuts', 0);
+				break;
+            default: ret = false;
 	        }
 	        if (ret) {
     			ev.preventDefault();
@@ -1481,7 +1481,7 @@ class AlarmSet {
 	// These are in time order, but in a moving 24-hour window. 
 	sortAlarms() {
 		this.alarms.forEach(alarm => alarm.target = alarm.date());
-		this.alarms.sort((x, y) => (x < y) ? -1 : ((x == y) ? 0 : 1));
+		this.alarms.sort((x, y) => (x.target < y.target) ? -1 : ((x.target == y.target) ? 0 : 1));
 		let expired = 0;
 		let day = new Date().getDate();
 		for (; (expired < this.alarms.length) && (this.alarms[expired].target.getDate() != day); expired++);
